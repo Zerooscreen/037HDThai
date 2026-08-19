@@ -32,11 +32,9 @@ function seoTitle(kind, title, year, epNumber = null, isEnded = false) {
   } else {
     const y = year || '2026';
     if (epNumber !== null) {
-      // Format khusus halaman detail Episode
       constจบ = isEnded ? ' (จบ)' : '';
       return `ดูซีรี่ย์ ${title} (${y}) อรุณรุ่ง Ep.${epNumber}${จบ}`;
     } else {
-      // Format halaman utama Serial TV
       return `ดูซีรี่ย์ ${title} (${y}) อรุณรุ่ง`;
     }
   }
@@ -303,10 +301,12 @@ app.get('/tv/:id/season/:season/episode/:episode', async (req, res) => {
     const year = (tvData.first_air_date || '').slice(0, 4);
     const isEnded = tvData.status === 'Ended' || tvData.status === 'Canceled';
     
-    // Cek apakah ini episode terakhir dari season tersebut
     const seasonDetail = await tmdb(`/tv/${id}/season/${season}`);
     const totalEpInSeason = (seasonDetail.episodes || []).length;
     const isLastEpisode = parseInt(episode) === totalEpInSeason && isEnded;
+
+    // Menggunakan pemutar video embed eksternal (2embed) agar otomatis memutar video berdasarkan ID, season, dan episode
+    const embedUrl = `https://www.2embed.cc/embedtv/${id}&s=${season}&e=${episode}`;
 
     const bodyHtml = `
       <a class="back-btn" href="/tv/${id}/${encodeURIComponent(slugify(tvTitle))}">← กลับหน้าซีรีส์</a>
@@ -322,9 +322,17 @@ app.get('/tv/:id/season/:season/episode/:episode', async (req, res) => {
             <span class="m-item star">★ ${epData.vote_average ? epData.vote_average.toFixed(1) : '-'} / 10</span>
             <span class="m-item">ตอนที่ ${episode}</span>
           </div>
-          ${watchButton(id, 'tv')}
         </div>
       </div>
+
+      <!-- PLAYER VIDEO EMBED -->
+      <div class="section-block">
+        <h3>รับชมตอนที่ ${episode}</h3>
+        <div style="position:relative; width:100%; padding-bottom:56.25%; background:#000; border-radius:12px; overflow:hidden;">
+          <iframe src="${embedUrl}" style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;" allowfullscreen></iframe>
+        </div>
+      </div>
+
       <div class="section-block"><h3>เรื่องย่อประจำตอน</h3><div class="bio-text">${escapeHtml(epData.overview) || 'ยังไม่มีเรื่องย่อสำหรับตอนนี้'}</div></div>
       ${nativeBannerAd()}
     `;
@@ -418,7 +426,6 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// Update API endpoint untuk menghasilkan link yang bisa diklik ke halaman detail episode
 app.get('/api/season/:tvId/:seasonNumber', async (req, res) => {
   try {
     const { tvId, seasonNumber } = req.params;
