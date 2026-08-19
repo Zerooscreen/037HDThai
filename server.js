@@ -25,17 +25,20 @@ const ROWS = {
   ],
 };
 
-// ---------- FORMAT JUDUL SEO DINAMIS ----------
-function seoTitle(kind, title, year, data = {}) {
+// ---------- FORMAT JUDUL SEO ----------
+function seoTitle(kind, title, year, epNumber = null, isEnded = false) {
   if (kind === 'movie') {
     return `(ดูหนังใหม่‼️)▷ ${title} เต็มเรื่อง ซับไทย ดูฟรี`;
   } else {
     const y = year || '2026';
-    const totalEp = data.number_of_episodes || 1;
-    const isEnded = data.status === 'Ended' || data.status === 'Canceled';
-    const epText = isEnded ? `Ep.${totalEp} (จบ)` : `Ep.${totalEp}`;
-    
-    return `ดูซีรี่ย์ ${title} (${y}) อรุณรุ่ง ${epText}`;
+    if (epNumber !== null) {
+      // Format khusus halaman detail Episode
+      constจบ = isEnded ? ' (จบ)' : '';
+      return `ดูซีรี่ย์ ${title} (${y}) อรุณรุ่ง Ep.${epNumber}${จบ}`;
+    } else {
+      // Format halaman utama Serial TV
+      return `ดูซีรี่ย์ ${title} (${y}) อรุณรุ่ง`;
+    }
   }
 }
 
@@ -107,22 +110,17 @@ app.get('/watch/:type/:id', async (req, res) => {
   try {
     const data = await tmdb(`/${type}/${id}`);
     title = data.title || data.name || 'กำลังเตรียมลิงก์รับชม';
-  } catch (e) {
-    // fallback
-  }
+  } catch (e) {}
 
   const bodyHtml = `
     <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:60vh; text-align:center; padding: 20px;">
       <h1 style="font-size: 1.8rem; margin-bottom: 15px; color: #fff;">กำลังพาคุณไปที่หน้า <span>${escapeHtml(title)}</span></h1>
       <p style="color: #aaa; margin-bottom: 25px;">กรุณารอสักครู่ ระบบกำลังเปลี่ยนเส้นทางใน <span id="countdown" style="color: #e50914; font-weight: bold; font-size: 1.5rem;">5</span> วินาที...</p>
-      
       ${nativeBannerAd()}
-
       <div style="margin-top: 20px;">
         <a id="direct-link" href="https://moviegate.bolt.host/th" class="watch-btn" style="text-decoration:none;">คลิกที่นี่หากรอนานเกินไป</a>
       </div>
     </div>
-
     <script>
       let seconds = 5;
       const countEl = document.getElementById('countdown');
@@ -193,7 +191,7 @@ app.get('/movie/:id/:slug?', async (req, res) => {
     `;
 
     const headHtml = head({
-      title: seoTitle('movie', data.title, (data.release_date || '').slice(0, 4), data),
+      title: seoTitle('movie', data.title, (data.release_date || '').slice(0, 4)),
       description: seoDescription(data.title, (data.release_date || '').slice(0, 4), (data.genres || []).map(g => g.name).join(', ')),
       url: `${SITE_URL}/movie/${id}/${encodeURIComponent(correctSlug)}`,
       image: img(data.backdrop_path || data.poster_path, 'w780'),
@@ -203,12 +201,7 @@ app.get('/movie/:id/:slug?', async (req, res) => {
     res.send(layout({ headHtml, bodyHtml, activeTab: 'movie' }));
   } catch (e) {
     res.status(404).send(layout({
-      headHtml: head({
-        title: 'ไม่พบข้อมูลหนัง · 037HDThai',
-        description: DEFAULT_DESC,
-        url: `${SITE_URL}/movie/${id}`,
-        robots: 'noindex, nofollow',
-      }),
+      headHtml: head({ title: 'ไม่พบข้อมูลหนัง', description: DEFAULT_DESC, url: `${SITE_URL}/movie/${id}`, robots: 'noindex, nofollow' }),
       bodyHtml: `<a class="back-btn" href="/movie">← กลับ</a><div class="empty">ไม่พบข้อมูลหนังเรื่องนี้</div>`,
       activeTab: 'movie',
     }));
@@ -280,7 +273,7 @@ app.get('/tv/:id/:slug?', async (req, res) => {
     `;
 
     const headHtml = head({
-      title: seoTitle('tv', data.name, (data.first_air_date || '').slice(0, 4), data),
+      title: seoTitle('tv', data.name, (data.first_air_date || '').slice(0, 4)),
       description: seoDescription(data.name, (data.first_air_date || '').slice(0, 4), (data.genres || []).map(g => g.name).join(', ')),
       url: `${SITE_URL}/tv/${id}/${encodeURIComponent(correctSlug)}`,
       image: img(data.backdrop_path || data.poster_path, 'w780'),
@@ -290,13 +283,65 @@ app.get('/tv/:id/:slug?', async (req, res) => {
     res.send(layout({ headHtml, bodyHtml, activeTab: 'tv' }));
   } catch (e) {
     res.status(404).send(layout({
-      headHtml: head({
-        title: 'ไม่พบข้อมูลซีรีส์ · 037HDThai',
-        description: DEFAULT_DESC,
-        url: `${SITE_URL}/tv/${id}`,
-        robots: 'noindex, nofollow',
-      }),
+      headHtml: head({ title: 'ไม่พบข้อมูลซีรีส์', description: DEFAULT_DESC, url: `${SITE_URL}/tv/${id}`, robots: 'noindex, nofollow' }),
       bodyHtml: `<a class="back-btn" href="/tv">← กลับ</a><div class="empty">ไม่พบข้อมูลซีรีส์นี้</div>`,
+      activeTab: 'tv',
+    }));
+  }
+});
+
+// ---------- DETAIL EPISODE: /tv/:id/season/:season/episode/:episode ----------
+app.get('/tv/:id/season/:season/episode/:episode', async (req, res) => {
+  const { id, season, episode } = req.params;
+  try {
+    const [tvData, epData] = await Promise.all([
+      tmdb(`/tv/${id}`),
+      tmdb(`/tv/${id}/season/${season}/episode/${episode}`)
+    ]);
+
+    const tvTitle = tvData.name || 'ซีรีส์';
+    const year = (tvData.first_air_date || '').slice(0, 4);
+    const isEnded = tvData.status === 'Ended' || tvData.status === 'Canceled';
+    
+    // Cek apakah ini episode terakhir dari season tersebut
+    const seasonDetail = await tmdb(`/tv/${id}/season/${season}`);
+    const totalEpInSeason = (seasonDetail.episodes || []).length;
+    const isLastEpisode = parseInt(episode) === totalEpInSeason && isEnded;
+
+    const bodyHtml = `
+      <a class="back-btn" href="/tv/${id}/${encodeURIComponent(slugify(tvTitle))}">← กลับหน้าซีรีส์</a>
+      <div class="detail-hero">
+        <div class="hero-bg" style="background-image:url('${img(epData.still_path || tvData.backdrop_path, 'original')}')"></div>
+        <div class="hero-fade"></div>
+        <div class="detail-poster"><img src="${img(epData.still_path || tvData.poster_path)}" alt="ภาพตอน ${escapeHtml(epData.name)}"></div>
+        <div class="detail-info">
+          <div class="detail-eyebrow">${escapeHtml(tvTitle)} · ซีซั่น ${season} ตอนที่ ${episode}</div>
+          <h1 class="detail-title">${escapeHtml(epData.name || `Ep. ${episode}`)}</h1>
+          <div class="detail-orig">ออกอากาศ: ${escapeHtml(epData.air_date || 'ไม่ระบุ')}</div>
+          <div class="detail-meta">
+            <span class="m-item star">★ ${epData.vote_average ? epData.vote_average.toFixed(1) : '-'} / 10</span>
+            <span class="m-item">ตอนที่ ${episode}</span>
+          </div>
+          ${watchButton(id, 'tv')}
+        </div>
+      </div>
+      <div class="section-block"><h3>เรื่องย่อประจำตอน</h3><div class="bio-text">${escapeHtml(epData.overview) || 'ยังไม่มีเรื่องย่อสำหรับตอนนี้'}</div></div>
+      ${nativeBannerAd()}
+    `;
+
+    const headHtml = head({
+      title: seoTitle('tv', tvTitle, year, episode, isLastEpisode),
+      description: `ดูซีรีส์ ${tvTitle} ซีซั่น ${season} ตอนที่ ${episode} (${epData.name}) ซับไทย อรุณรุ่ง`,
+      url: `${SITE_URL}/tv/${id}/season/${season}/episode/${episode}`,
+      image: img(epData.still_path || tvData.backdrop_path, 'w780'),
+      type: 'video.episode',
+    });
+
+    res.send(layout({ headHtml, bodyHtml, activeTab: 'tv' }));
+  } catch (e) {
+    res.status(404).send(layout({
+      headHtml: head({ title: 'ไม่พบข้อมูลตอน', description: DEFAULT_DESC, url: `${SITE_URL}/tv/${id}`, robots: 'noindex, nofollow' }),
+      bodyHtml: `<a class="back-btn" href="/tv">← กลับ</a><div class="empty">ไม่พบข้อมูลตอนนี้</div>`,
       activeTab: 'tv',
     }));
   }
@@ -373,6 +418,7 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
+// Update API endpoint untuk menghasilkan link yang bisa diklik ke halaman detail episode
 app.get('/api/season/:tvId/:seasonNumber', async (req, res) => {
   try {
     const { tvId, seasonNumber } = req.params;
@@ -384,6 +430,7 @@ app.get('/api/season/:tvId/:seasonNumber', async (req, res) => {
       rating: ep.vote_average ? ep.vote_average.toFixed(1) : '-',
       overview: ep.overview,
       still: img(ep.still_path, 'w300'),
+      url: `/tv/${tvId}/season/${seasonNumber}/episode/${ep.episode_number}`
     }));
     res.json({ episodes });
   } catch (e) {
