@@ -92,6 +92,53 @@ app.get('/', (req, res) => renderHome(req, res, 'movie'));
 app.get('/movie', (req, res) => renderHome(req, res, 'movie'));
 app.get('/tv', (req, res) => renderHome(req, res, 'tv'));
 
+// ---------- WATCH REDIRECT / COUNTDOWN PAGE ----------
+app.get('/watch/:type/:id', async (req, res) => {
+  const { type, id } = req.params;
+  let title = 'กำลังเตรียมลิงก์รับชม';
+  try {
+    const data = await tmdb(`/${type}/${id}`);
+    title = data.title || data.name || 'กำลังเตรียมลิงก์รับชม';
+  } catch (e) {
+    // fallback jika error fetch tmdb
+  }
+
+  const bodyHtml = `
+    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:60vh; text-align:center; padding: 20px;">
+      <h1 style="font-size: 1.8rem; margin-bottom: 15px; color: #fff;">กำลังพาคุณไปที่หน้า <span>${escapeHtml(title)}</span></h1>
+      <p style="color: #aaa; margin-bottom: 25px;">กรุณารอสักครู่ ระบบกำลังเปลี่ยนเส้นทางใน <span id="countdown" style="color: #e50914; font-weight: bold; font-size: 1.5rem;">5</span> วินาที...</p>
+      
+      ${nativeBannerAd()}
+
+      <div style="margin-top: 20px;">
+        <a id="direct-link" href="https://moviegate.bolt.host/th" class="watch-btn" style="text-decoration:none;">คลิกที่นี่หากรอนานเกินไป</a>
+      </div>
+    </div>
+
+    <script>
+      let seconds = 5;
+      const countEl = document.getElementById('countdown');
+      const timer = setInterval(() => {
+        seconds--;
+        if(countEl) countEl.innerText = seconds;
+        if(seconds <= 0) {
+          clearInterval(timer);
+          window.location.href = 'https://moviegate.bolt.host/th';
+        }
+      }, 1000);
+    </script>
+  `;
+
+  const headHtml = head({
+    title: `กำลังเปลี่ยนเส้นทาง · ${SITE_NAME}`,
+    description: DEFAULT_DESC,
+    url: `${SITE_URL}/watch/${type}/${id}`,
+    robots: 'noindex, nofollow',
+  });
+
+  res.send(layout({ headHtml, bodyHtml, activeTab: type === 'tv' ? 'tv' : 'movie' }));
+});
+
 // ---------- DETAIL: /movie/:id/:slug? ----------
 app.get('/movie/:id/:slug?', async (req, res) => {
   const { id } = req.params;
@@ -125,7 +172,7 @@ app.get('/movie/:id/:slug?', async (req, res) => {
             <span class="m-item">${escapeHtml(data.status || '')}</span>
           </div>
           ${genreRow(data.genres)}
-          ${watchButton()}
+          ${watchButton(data.id, 'movie')}
         </div>
       </div>
       <div class="section-block"><h3>เรื่องย่อ</h3><div class="bio-text">${escapeHtml(data.overview) || 'ยังไม่มีเรื่องย่อ'}</div></div>
@@ -208,7 +255,7 @@ app.get('/tv/:id/:slug?', async (req, res) => {
             <span class="m-item">${escapeHtml(data.status || '')}</span>
           </div>
           ${genreRow(data.genres)}
-          ${watchButton()}
+          ${watchButton(data.id, 'tv')}
         </div>
       </div>
       <div class="section-block"><h3>เรื่องย่อ</h3><div class="bio-text">${escapeHtml(data.overview) || 'ยังไม่มีเรื่องย่อ'}</div></div>
