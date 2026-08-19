@@ -100,7 +100,7 @@ app.get('/watch/:type/:id', async (req, res) => {
     const data = await tmdb(`/${type}/${id}`);
     title = data.title || data.name || 'กำลังเตรียมลิงก์รับชม';
   } catch (e) {
-    // fallback jika error fetch tmdb
+    // fallback
   }
 
   const bodyHtml = `
@@ -410,6 +410,7 @@ ${uniq.map(u => `  <url><loc>${u.loc}</loc><lastmod>${today}</lastmod><changefre
   }
 });
 
+// ---------- robots.txt ----------
 app.get('/robots.txt', (req, res) => {
   res.type('text/plain').send(`User-agent: *\nAllow: /\nSitemap: ${SITE_URL}/sitemap.xml\n`);
 });
