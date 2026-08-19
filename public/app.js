@@ -1,5 +1,4 @@
 document.addEventListener('DOMContentLoaded', () => {
-  // Handle klik pada season untuk memuat daftar episode
   const seasonItems = document.querySelectorAll('.season-item');
   
   seasonItems.forEach(item => {
@@ -8,7 +7,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (head && panel) {
       head.addEventListener('click', async () => {
-        // Toggle active class
         const isActive = item.classList.toggle('active');
         
         if (isActive && !panel.innerHTML.trim()) {
@@ -23,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (data.episodes && data.episodes.length > 0) {
               panel.innerHTML = data.episodes.map(ep => `
-                <a href="${ep.url}" class="episode-row" style="display: flex; gap: 12px; padding: 10px; text-decoration: none; color: inherit; border-bottom: 1px solid #222; align-items: center;">
+                <a href="/tv/${tvId}/season/${seasonNum}/episode/${ep.number}" class="episode-row" style="display: flex; gap: 12px; padding: 10px; text-decoration: none; color: inherit; border-bottom: 1px solid #222; align-items: center;">
                   <img src="${ep.still}" alt="Ep ${ep.number}" style="width: 100px; height: 56px; object-fit: cover; border-radius: 4px; background: #111;">
                   <div style="flex: 1;">
                     <div style="font-weight: bold; color: #fff; font-size: 0.95rem;">ตอนที่ ${ep.number}: ${escapeHtml(ep.name)}</div>
