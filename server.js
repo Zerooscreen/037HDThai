@@ -25,10 +25,18 @@ const ROWS = {
   ],
 };
 
-function seoTitle(kind, title, year) {
-  const label = kind === 'movie' ? 'หนัง' : 'ซีรีส์';
-  const y = year || 'ไม่ทราบปีฉาย';
-  return `[${label}] ${title} (${y}) เรื่องย่อ เรตติ้ง นักแสดง ตัวอย่างหนัง สรุปครบ`;
+// ---------- FORMAT JUDUL SEO DINAMIS ----------
+function seoTitle(kind, title, year, data = {}) {
+  if (kind === 'movie') {
+    return `(ดูหนังใหม่‼️)▷ ${title} เต็มเรื่อง ซับไทย ดูฟรี`;
+  } else {
+    const y = year || '2026';
+    const totalEp = data.number_of_episodes || 1;
+    const isEnded = data.status === 'Ended' || data.status === 'Canceled';
+    const epText = isEnded ? `Ep.${totalEp} (จบ)` : `Ep.${totalEp}`;
+    
+    return `ดูซีรี่ย์ ${title} (${y}) อรุณรุ่ง ${epText}`;
+  }
 }
 
 function seoDescription(title, year, genreNames) {
@@ -185,7 +193,7 @@ app.get('/movie/:id/:slug?', async (req, res) => {
     `;
 
     const headHtml = head({
-      title: seoTitle('movie', data.title, (data.release_date || '').slice(0, 4)),
+      title: seoTitle('movie', data.title, (data.release_date || '').slice(0, 4), data),
       description: seoDescription(data.title, (data.release_date || '').slice(0, 4), (data.genres || []).map(g => g.name).join(', ')),
       url: `${SITE_URL}/movie/${id}/${encodeURIComponent(correctSlug)}`,
       image: img(data.backdrop_path || data.poster_path, 'w780'),
@@ -272,7 +280,7 @@ app.get('/tv/:id/:slug?', async (req, res) => {
     `;
 
     const headHtml = head({
-      title: seoTitle('tv', data.name, (data.first_air_date || '').slice(0, 4)),
+      title: seoTitle('tv', data.name, (data.first_air_date || '').slice(0, 4), data),
       description: seoDescription(data.name, (data.first_air_date || '').slice(0, 4), (data.genres || []).map(g => g.name).join(', ')),
       url: `${SITE_URL}/tv/${id}/${encodeURIComponent(correctSlug)}`,
       image: img(data.backdrop_path || data.poster_path, 'w780'),
