@@ -1,13 +1,12 @@
 const express = require('express');
 const path = require('path');
 const { tmdb, img, slugify } = require('./lib/tmdb');
-const { head, layout, posterCard, genreRow, trailerBlock, castGrid, escapeHtml, movieJsonLd, tvJsonLd, sideBannerAd, nativeBannerAd, DEFAULT_TITLE, DEFAULT_DESC, SITE_NAME } = require('./lib/render');
+const { head, layout, posterCard, genreRow, trailerBlock, castGrid, similarGrid, watchButton, escapeHtml, movieJsonLd, tvJsonLd, sideBannerAd, nativeBannerAd, DEFAULT_TITLE, DEFAULT_DESC, SITE_NAME } = require('./lib/render');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// TODO: ganti dengan domain final Thailand Anda setelah deploy di Railway
-const SITE_URL = process.env.SITE_URL || 'https://cinebox-th.up.railway.app';
+const SITE_URL = process.env.SITE_URL || 'https://037hdthai.up.railway.app';
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -26,7 +25,6 @@ const ROWS = {
   ],
 };
 
-// ---------- Pola judul & deskripsi SEO (sama untuk SEMUA halaman detail) ----------
 function seoTitle(kind, title, year) {
   const label = kind === 'movie' ? 'หนัง' : 'ซีรีส์';
   const y = year || 'ไม่ทราบปีฉาย';
@@ -36,7 +34,7 @@ function seoTitle(kind, title, year) {
 function seoDescription(title, year, genreNames) {
   const yearPart = year ? `ปี ${year}, ` : '';
   const genrePart = genreNames ? `แนว ${genreNames}, ` : '';
-  return `เรื่องย่อ นักแสดง เรตติ้ง และตัวอย่างหนังอย่างเป็นทางการของ ${title} ดูได้ที่ซีนีบ็อกซ์ ${genrePart}${yearPart}ข้อมูลฉายครบถ้วน`;
+  return `เรื่องย่อ นักแสดง เรตติ้ง และตัวอย่างหนังอย่างเป็นทางการของ ${title} ดูได้ที่ ${SITE_NAME} ${genrePart}${yearPart}ข้อมูลฉายครบถ้วน`;
 }
 
 // ---------- HOME (/, /movie, /tv) ----------
@@ -98,10 +96,11 @@ app.get('/tv', (req, res) => renderHome(req, res, 'tv'));
 app.get('/movie/:id/:slug?', async (req, res) => {
   const { id } = req.params;
   try {
-    const [data, credits, videos] = await Promise.all([
+    const [data, credits, videos, similar] = await Promise.all([
       tmdb(`/movie/${id}`),
       tmdb(`/movie/${id}/credits`),
       tmdb(`/movie/${id}/videos`),
+      tmdb(`/movie/${id}/similar`),
     ]);
     const correctSlug = slugify(data.title);
     if (req.params.slug !== correctSlug) {
@@ -126,12 +125,14 @@ app.get('/movie/:id/:slug?', async (req, res) => {
             <span class="m-item">${escapeHtml(data.status || '')}</span>
           </div>
           ${genreRow(data.genres)}
+          ${watchButton()}
         </div>
       </div>
       <div class="section-block"><h3>เรื่องย่อ</h3><div class="bio-text">${escapeHtml(data.overview) || 'ยังไม่มีเรื่องย่อ'}</div></div>
       ${nativeBannerAd()}
       <div class="section-block"><h3>ตัวอย่างหนัง</h3>${trailerBlock(videos)}</div>
       <div class="section-block"><h3>นักแสดง</h3>${castGrid(credits)}</div>
+      <div class="section-block"><h3>หนังที่คล้ายกัน</h3>${similarGrid(similar.results, 'movie')}</div>
       ${sideBannerAd()}
       ${movieJsonLd(data, `${SITE_URL}/movie/${id}/${encodeURIComponent(correctSlug)}`)}
     `;
@@ -148,7 +149,7 @@ app.get('/movie/:id/:slug?', async (req, res) => {
   } catch (e) {
     res.status(404).send(layout({
       headHtml: head({
-        title: 'ไม่พบข้อมูลหนัง · ซีนีบ็อกซ์',
+        title: 'ไม่พบข้อมูลหนัง · 037HDThai',
         description: DEFAULT_DESC,
         url: `${SITE_URL}/movie/${id}`,
         robots: 'noindex, nofollow',
@@ -163,10 +164,11 @@ app.get('/movie/:id/:slug?', async (req, res) => {
 app.get('/tv/:id/:slug?', async (req, res) => {
   const { id } = req.params;
   try {
-    const [data, credits, videos] = await Promise.all([
+    const [data, credits, videos, similar] = await Promise.all([
       tmdb(`/tv/${id}`),
       tmdb(`/tv/${id}/credits`),
       tmdb(`/tv/${id}/videos`),
+      tmdb(`/tv/${id}/similar`),
     ]);
     const correctSlug = slugify(data.name);
     if (req.params.slug !== correctSlug) {
@@ -206,6 +208,7 @@ app.get('/tv/:id/:slug?', async (req, res) => {
             <span class="m-item">${escapeHtml(data.status || '')}</span>
           </div>
           ${genreRow(data.genres)}
+          ${watchButton()}
         </div>
       </div>
       <div class="section-block"><h3>เรื่องย่อ</h3><div class="bio-text">${escapeHtml(data.overview) || 'ยังไม่มีเรื่องย่อ'}</div></div>
@@ -216,6 +219,7 @@ app.get('/tv/:id/:slug?', async (req, res) => {
         <h3>ซีซั่นและตอน</h3>
         <div class="season-list" id="season-list">${seasonsHtml}</div>
       </div>
+      <div class="section-block"><h3>ซีรีส์ที่คล้ายกัน</h3>${similarGrid(similar.results, 'tv')}</div>
       ${sideBannerAd()}
       ${tvJsonLd(data, `${SITE_URL}/tv/${id}/${encodeURIComponent(correctSlug)}`)}
     `;
@@ -232,13 +236,61 @@ app.get('/tv/:id/:slug?', async (req, res) => {
   } catch (e) {
     res.status(404).send(layout({
       headHtml: head({
-        title: 'ไม่พบข้อมูลซีรีส์ · ซีนีบ็อกซ์',
+        title: 'ไม่พบข้อมูลซีรีส์ · 037HDThai',
         description: DEFAULT_DESC,
         url: `${SITE_URL}/tv/${id}`,
         robots: 'noindex, nofollow',
       }),
       bodyHtml: `<a class="back-btn" href="/tv">← กลับ</a><div class="empty">ไม่พบข้อมูลซีรีส์นี้</div>`,
       activeTab: 'tv',
+    }));
+  }
+});
+
+// ---------- PERSON DETAIL: /person/:id/:slug? ----------
+app.get('/person/:id/:slug?', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [person, credits] = await Promise.all([
+      tmdb(`/person/${id}`),
+      tmdb(`/person/${id}/combined_credits`),
+    ]);
+    const correctSlug = slugify(person.name);
+    if (req.params.slug !== correctSlug) {
+      return res.redirect(301, `/person/${id}/${encodeURIComponent(correctSlug)}`);
+    }
+
+    const castList = (credits.cast || []).sort((a, b) => (b.vote_count || 0) - (a.vote_count || 0));
+    const cards = castList.slice(0, 18).map(item => posterCard(item, item.media_type === 'tv' ? 'tv' : 'movie')).join('');
+
+    const bodyHtml = `
+      <a class="back-btn" href="/movie">← กลับหน้าแรก</a>
+      <div class="person-profile" style="display:flex; gap:24px; align-items:center; margin: 20px 0; flex-wrap:wrap;">
+        <img src="${img(person.profile_path, 'w300')}" alt="${escapeHtml(person.name)}" style="border-radius:12px; width:200px; object-fit:cover;">
+        <div>
+          <h1 style="font-size:2rem; margin-bottom:10px;">${escapeHtml(person.name)}</h1>
+          <p style="color:#aaa; margin-bottom:8px;"><strong>อาชีพ:</strong> ${escapeHtml(person.known_for_department || '-')}</p>
+          <p style="color:#aaa; margin-bottom:8px;"><strong>วันเกิด:</strong> ${escapeHtml(person.birthday || '-')}</p>
+          <p style="color:#aaa;"><strong>สถานที่เกิด:</strong> ${escapeHtml(person.place_of_birth || '-')}</p>
+        </div>
+      </div>
+      <div class="section-block"><h3>ประวัติส่วนตัว</h3><div class="bio-text">${escapeHtml(person.biography) || 'ไม่มีประวัติส่วนตัว'}</div></div>
+      <div class="section-block"><h3>ผลงานการแสดง</h3><div class="grid">${cards}</div></div>
+    `;
+
+    const headHtml = head({
+      title: `${person.name} · ประวัติ ผลงานและข้อมูลนักแสดง · 037HDThai`,
+      description: `ประวัติและผลงานการแสดงของ ${person.name} ข้อมูลภาพยนตร์และซีรีส์ทั้งหมดที่ร่วมแสดง`,
+      url: `${SITE_URL}/person/${id}/${encodeURIComponent(correctSlug)}`,
+      image: img(person.profile_path, 'w780'),
+    });
+
+    res.send(layout({ headHtml, bodyHtml, activeTab: 'movie' }));
+  } catch (e) {
+    res.status(404).send(layout({
+      headHtml: head({ title: 'ไม่พบข้อมูลนักแสดง', description: DEFAULT_DESC, url: `${SITE_URL}`, robots: 'noindex, nofollow' }),
+      bodyHtml: `<div class="empty">ไม่พบข้อมูลบุคคลนี้</div>`,
+      activeTab: 'movie',
     }));
   }
 });
@@ -316,5 +368,5 @@ app.get('/robots.txt', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`ซีนีบ็อกซ์ (TH) เซิร์ฟเวอร์ทำงานที่: http://localhost:${PORT}`);
+  console.log(`037HDThai เซิร์ฟเวอร์ทำงานที่: http://localhost:${PORT}`);
 });
